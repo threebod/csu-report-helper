@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         中南大学金工实习答题助手
 // @namespace    local.csu.report-helper
-// @version      1.1.0
+// @version      1.1.1
 // @description  题库自动勾选、手动生成 AI 答案、最终选择记录；成功提交后归档本轮。
 // @match        http://szgxjx.csu.edu.cn/zndxstudent/*
 // @match        https://szgxjx.csu.edu.cn/zndxstudent/*
@@ -83,12 +83,12 @@
         catch { return {error: 'JSON 内容不完整或格式无效'}; }
     }
     function roundCsv(round) {
-        const rows = [['轮次状态','开始时间','提交时间','作答记录ID','题型','题号','题目','全部选项','最终选择','题库答案','PDF页码','核对情况','最后改选时间']];
+        const rows = [['轮次状态','开始时间','提交时间','作答记录ID','题型','题号','题目','全部选项','最终选择','题库答案','核对情况','最后改选时间']];
         for (const question of round.questions) rows.push([
             round.finishedAt ? '已成功提交' : '答题中', round.startedAt, round.finishedAt || '', round.recordId,
             question.type, question.number, question.title,
             question.options.map(option => `${option.letter}. ${option.text}`).join('；'),
-            answerText(question, question.selected), referenceText(question), question.match.page || '',
+            answerText(question, question.selected), referenceText(question), 
             result(question), question.updatedAt || ''
         ]);
         const cell = value => {
@@ -408,8 +408,7 @@
             element('td', question.title, row);
             const selected = element('td', answerText(question, question.selected), row);
             if (question.updatedAt) element('small', '最后改选：' + new Date(question.updatedAt).toLocaleTimeString('zh-CN'), selected);
-            const reference = element('td', referenceText(question), row);
-            if (question.match.page) element('small', `PDF 第 ${question.match.page} 页`, reference);
+            element('td', referenceText(question), row);
             const state = result(question), cell = element('td', state, row);
             cell.className = state === '与题库一致' ? 'good' : state === '与题库不一致' ? 'bad' : '';
         }
@@ -480,7 +479,7 @@
         const text = JSON.stringify([reference, state, question.selected]);
         if (lastHint === text) return;
         lastHint = text;
-        hint.children[1].textContent = `参考答案：${reference}` + (question.match.page ? `（PDF 第 ${question.match.page} 页）` : '');
+        hint.children[1].textContent = `参考答案：${reference}`;
         hint.children[2].textContent = `已记录：${answerText(question, question.selected)} · ${state}`;
     }
     function tick() {
