@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         中南大学金工实习答题助手
 // @namespace    local.csu.report-helper
-// @version      1.1.4
+// @version      1.1.5
 // @description  题库自动勾选、手动生成 AI 答案、最终选择记录；成功提交后归档本轮。
 // @match        http://szgxjx.csu.edu.cn/zndxstudent/*
 // @match        https://szgxjx.csu.edu.cn/zndxstudent/*
@@ -82,6 +82,23 @@
         try { return {value: JSON.parse(text)}; }
         catch { return {error: 'JSON 内容不完整或格式无效'}; }
     }
+    function questionHistory(question, bundle) {
+        const title = normalize(question.title);
+        const optionsKey = q => JSON.stringify(q.options.map(option => meaning(option.text)).sort());
+        const options = optionsKey(question);
+        const rounds = [bundle.previous, ...(bundle.olderRounds || [])].filter(Boolean).slice(0, 3);
+        return rounds.flatMap((round, index) => {
+            const matches = round.questions.filter(q => q.type === question.type &&
+                normalize(q.title) === title && optionsKey(q) === options);
+            const prior = matches.find(q => q.id === question.id) || (matches.length === 1 ? matches[0] : null);
+            if (!prior) return [];
+            const choices = prior.options.filter(option => prior.selected.includes(option.id)).map(option => option.text);
+            const date = new Date(round.startedAt).toLocaleString('zh-CN');
+            const status = round.finishedAt ? '已提交' : '提交状态未确认';
+            const label = index === 0 ? '上一轮' : '前 ' + (index + 1) + ' 轮';
+            return [label + ' · ' + date + ' · ' + status + ' · ' + (choices.join('；') || '未作答')];
+        });
+    }
     function roundAccuracy(round) {
         let correct = 0, checked = 0;
         for (const question of round.questions) {
@@ -111,7 +128,7 @@
     }
     // Node only: exercise the same matching and round logic used by the userscript.
     if (typeof module === 'object' && module.exports) {
-        module.exports = {BANK, normalize, matchQuestion, result, updateSelection, finishRound, decodeJson, roundCsv, roundAccuracy};
+        module.exports = {BANK, normalize, matchQuestion, result, updateSelection, finishRound, decodeJson, roundCsv, roundAccuracy, questionHistory};
         return;
     }
 
@@ -164,7 +181,10 @@
         if (!recordId) { notice = '无法识别作答记录，暂不记录，避免混入其他轮次。'; return; }
         if (!bundle.current || bundle.current.finishedAt || bundle.current.recordId !== recordId) {
             if (bundle.current && !bundle.current.finishedAt) bundle.current.unconfirmed = true;
-            if (bundle.current) bundle.previous = bundle.current;
+            if (bundle.current) {
+                bundle.olderRounds = [bundle.previous, ...(bundle.olderRounds || [])].filter(Boolean).slice(0, 2);
+                bundle.previous = bundle.current;
+            }
             bundle.current = {recordId, startedAt: new Date().toISOString(), finishedAt: null, questions: []};
         }
         blockedReason = '';
@@ -486,6 +506,14 @@
             const header = root.querySelector('.header');
             if (header) header.after(hint); else root.prepend(hint);
             shownRoot = root; lastHint = '';
+            if (question.match.status !== '已匹配') {
+                const history = element('div', undefined, hint);
+                history.style.margin = '6px 0';
+                element('strong', '同题历史选择', history);
+                const records = questionHistory(question, bundle);
+                if (!records.length) element('div', '最近三轮暂无同题记录', history);
+                for (const record of records) element('div', record, history);
+            }
             if (question.match.page && !question.autoTried && !bundle.current.finishedAt) {
                 question.autoTried = true; save(); fill(root,question,question.match.answer);
             } else if (!question.match.page && !bundle.current.finishedAt) {
