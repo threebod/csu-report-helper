@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         中南大学金工实习答题助手
 // @namespace    local.csu.report-helper
-// @version      1.1.1
+// @version      1.1.2
 // @description  题库自动勾选、手动生成 AI 答案、最终选择记录；成功提交后归档本轮。
 // @match        http://szgxjx.csu.edu.cn/zndxstudent/*
 // @match        https://szgxjx.csu.edu.cn/zndxstudent/*
@@ -341,6 +341,9 @@
         const status = element('span', '', toolbar); status.className = 'status';
         const button = element('button', '本轮汇总', toolbar);
         button.onclick = () => { snapshot(); summaryOpen = true; previousView = false; lastSummary = ''; renderSummary(); };
+        const config = element('button', '配置', toolbar);
+        config.style.marginLeft = '6px';
+        config.onclick = configureKey;
         const overlay = element('div', undefined, shadow); overlay.className = 'overlay'; overlay.hidden = true;
         const dialog = element('section', undefined, overlay); dialog.className = 'dialog';
         dialog.setAttribute('role', 'dialog'); dialog.setAttribute('aria-modal', 'true'); dialog.setAttribute('aria-label', '答题记录汇总');
@@ -415,10 +418,11 @@
         shadow.querySelector('.topline button').focus();
     }
     const keyName = 'csu-deepseek-key';
-    GM_registerMenuCommand('设置 DeepSeek API Key', () => {
+    function configureKey() {
         const input = window.prompt('输入 DeepSeek 官方 API Key，留空保存可清除');
         if (input !== null) GM_setValue(keyName, input.trim());
-    });
+    }
+    GM_registerMenuCommand('设置 DeepSeek API Key', configureKey);
     function fill(root, q, indices) {
         if (bundle?.current?.finishedAt || blockedReason || root.hidden || !root.isConnected ||
             !root.getClientRects().length || bindings.get(root) !== q || !bundle.current.questions.includes(q)) return;
@@ -429,7 +433,7 @@
     }
     function generate(root, q, button, label) {
         const key = GM_getValue(keyName, '');
-        if (!key) { label.textContent = '请在油猴菜单中设置 DeepSeek API Key'; return; }
+        if (!key) { label.textContent = '请点击右下角“配置”设置 DeepSeek API Key'; return; }
         if (q.aiAnswer) { fill(root,q,q.aiAnswer); return; }
         button.disabled = true;
         label.textContent = 'DeepSeek 正在生成…';
