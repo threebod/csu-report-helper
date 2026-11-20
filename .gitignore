@@ -1,3 +1,4 @@
 personal.user.js
 *.pdf
 __pycache__/
+/demo.html
