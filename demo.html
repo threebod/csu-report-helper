@@ -3,7 +3,7 @@
     <app-report-exame><div class="top"><span>答题助手 · 离线测试</span><span class="personmsg">演示用户 10000</span></div>
     <div class="title">练习演示 · 第一题自动匹配，第二题点击生成 AI 答案</div><main class="workspace"><div id="questions"></div><div class="actions"><button id="prev">上一题</button><button id="next">下一题</button><button id="submit">提交</button><button id="cancel">取消提交（不发送请求）</button></div><div id="message"></div></main></app-report-exame>
     <script>
-location.hash='/report-exame?tId=demo&wId=demo&rId=demo';
+history.replaceState(null,'','#/report-exame?tId=demo&wId=demo&rId=demo');
 const store=new Map();
 window.GM_getValue=(k,v)=>store.get(k)??v;
 window.GM_setValue=(k,v)=>store.set(k,v);
