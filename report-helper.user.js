@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         中南大学金工实习答题助手
 // @namespace    local.csu.report-helper
-// @version      1.1.2
+// @version      1.1.3
 // @description  题库自动勾选、手动生成 AI 答案、最终选择记录；成功提交后归档本轮。
 // @match        http://szgxjx.csu.edu.cn/zndxstudent/*
 // @match        https://szgxjx.csu.edu.cn/zndxstudent/*
@@ -85,7 +85,7 @@
     function roundCsv(round) {
         const rows = [['轮次状态','开始时间','提交时间','作答记录ID','题型','题号','题目','全部选项','最终选择','题库答案','核对情况','最后改选时间']];
         for (const question of round.questions) rows.push([
-            round.finishedAt ? '已成功提交' : '答题中', round.startedAt, round.finishedAt || '', round.recordId,
+            round.finishedAt ? '已成功提交' : round.unconfirmed ? '提交状态未确认' : '答题中', round.startedAt, round.finishedAt || '', round.recordId,
             question.type, question.number, question.title,
             question.options.map(option => `${option.letter}. ${option.text}`).join('；'),
             answerText(question, question.selected), referenceText(question), 
@@ -152,11 +152,7 @@
         const recordId = String(paper.reportRecordId || data.id || '');
         if (!recordId) { notice = '无法识别作答记录，暂不记录，避免混入其他轮次。'; return; }
         if (!bundle.current || bundle.current.finishedAt || bundle.current.recordId !== recordId) {
-            // A changed server ID alone is not a successful submission; keep the unfinished record.
-            if (bundle.current && !bundle.current.finishedAt) {
-                blockedReason = '网站作答记录已变化，当前轮尚未收到提交成功结果；已保留原记录，暂停新题记录。';
-                return;
-            }
+            if (bundle.current && !bundle.current.finishedAt) bundle.current.unconfirmed = true;
             if (bundle.current) bundle.previous = bundle.current;
             bundle.current = {recordId, startedAt: new Date().toISOString(), finishedAt: null, questions: []};
         }
@@ -399,7 +395,7 @@
         const stats = {};
         for (const question of round.questions) {const state = result(question); stats[state] = (stats[state] || 0)+1;}
         const time = new Date(round.finishedAt || round.startedAt).toLocaleString('zh-CN');
-        counts.textContent = `${round.finishedAt ? '已成功提交' : '答题中'} · ${time} · 共 ${round.questions.length} 题 · ` +
+        counts.textContent = `${round.finishedAt ? '已成功提交' : round.unconfirmed ? '提交状态未确认' : '答题中'} · ${time} · 共 ${round.questions.length} 题 · ` +
             Object.entries(stats).map(([state,count]) => `${state} ${count}`).join(' / ');
         const scroll = element('div', undefined, dialog); scroll.className = 'scroll';
         const table = element('table', undefined, scroll), thead = element('thead', undefined, table), header = element('tr', undefined, thead);
