@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         中南大学金工实习答题助手
 // @namespace    local.csu.report-helper
-// @version      1.1.3
+// @version      1.1.4
 // @description  题库自动勾选、手动生成 AI 答案、最终选择记录；成功提交后归档本轮。
 // @match        http://szgxjx.csu.edu.cn/zndxstudent/*
 // @match        https://szgxjx.csu.edu.cn/zndxstudent/*
@@ -82,14 +82,25 @@
         try { return {value: JSON.parse(text)}; }
         catch { return {error: 'JSON 内容不完整或格式无效'}; }
     }
+    function roundAccuracy(round) {
+        let correct = 0, checked = 0;
+        for (const question of round.questions) {
+            if (!question.selected.length || question.match.status !== '已匹配') continue;
+            checked++;
+            if (result(question) === '与题库一致') correct++;
+        }
+        return {correct, checked, rate: checked ? (100 * correct / checked).toFixed(2) + '%' : ''};
+    }
     function roundCsv(round) {
-        const rows = [['轮次状态','开始时间','提交时间','作答记录ID','题型','题号','题目','全部选项','最终选择','题库答案','核对情况','最后改选时间']];
+        const accuracy = roundAccuracy(round);
+        const rows = [['轮次状态','开始时间','提交时间','作答记录ID','题型','题号','题目','全部选项','最终选择','题库答案','核对情况','最后改选时间','网站正确率','题库正确率','题库答对题数','题库已核对题数']];
         for (const question of round.questions) rows.push([
             round.finishedAt ? '已成功提交' : round.unconfirmed ? '提交状态未确认' : '答题中', round.startedAt, round.finishedAt || '', round.recordId,
             question.type, question.number, question.title,
             question.options.map(option => `${option.letter}. ${option.text}`).join('；'),
             answerText(question, question.selected), referenceText(question), 
-            result(question), question.updatedAt || ''
+            result(question), question.updatedAt || '',
+            round.siteAccuracy || '', accuracy.rate, accuracy.correct, accuracy.checked
         ]);
         const cell = value => {
             let text = String(value ?? '');
@@ -100,7 +111,7 @@
     }
     // Node only: exercise the same matching and round logic used by the userscript.
     if (typeof module === 'object' && module.exports) {
-        module.exports = {BANK, normalize, matchQuestion, result, updateSelection, finishRound, decodeJson, roundCsv};
+        module.exports = {BANK, normalize, matchQuestion, result, updateSelection, finishRound, decodeJson, roundCsv, roundAccuracy};
         return;
     }
 
@@ -237,7 +248,14 @@
             finishRound(context.round, payload, context.body.submitType)) {
             context.round.questions = context.submittedQuestions;
             context.round.project ||= payload.datas?.paperName;
-            if (context.round.showScore) context.round.score = payload.datas?.finalScore;
+            if (context.round.showScore) {
+                context.round.score = payload.datas?.finalScore;
+                const rawRate = String(payload.datas?.rightRate ?? '').trim().replace(/%$/, '');
+                const rate = Number(rawRate);
+                if (rawRate && Number.isFinite(rate) && rate >= 0 && rate <= 100) {
+                    context.round.siteAccuracy = rate + '%';
+                }
+            }
             sessionFinished = true;
             notice = '本轮已成功提交，最终选择已归档。';
             save();
@@ -397,6 +415,9 @@
         const time = new Date(round.finishedAt || round.startedAt).toLocaleString('zh-CN');
         counts.textContent = `${round.finishedAt ? '已成功提交' : round.unconfirmed ? '提交状态未确认' : '答题中'} · ${time} · 共 ${round.questions.length} 题 · ` +
             Object.entries(stats).map(([state,count]) => `${state} ${count}`).join(' / ');
+        const accuracy = roundAccuracy(round);
+        const bankRate = accuracy.rate ? `${accuracy.rate}（${accuracy.correct}/${accuracy.checked}）` : '暂无可核对作答';
+        element('div', `网站正确率 ${round.siteAccuracy || '暂无'} · 题库正确率 ${bankRate}`, counts);
         const scroll = element('div', undefined, dialog); scroll.className = 'scroll';
         const table = element('table', undefined, scroll), thead = element('thead', undefined, table), header = element('tr', undefined, thead);
         for (const title of ['题型 / 题号','题目','最终选择','题库答案','核对情况']) element('th', title, header);
